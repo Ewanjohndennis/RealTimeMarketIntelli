@@ -22,5 +22,10 @@ def get_news(company: str):
     r = requests.get(url)
     return r.json()
 
-if __name__ == "__main__":
+
+def start_mcp_server():
     mcp.run()
+
+
+if __name__ == "__main__":
+    start_mcp_server()

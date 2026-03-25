@@ -23,8 +23,21 @@ from reportlab.platypus import (
 )
 
 from project.orchestrator import run_pipeline
+import threading
+from tools_server import start_mcp_server
 
 load_dotenv()
+
+# ── Start MCP tools server ─────────────────────────────────────────
+if "mcp_started" not in st.session_state:
+
+    def run_mcp():
+        start_mcp_server()
+
+    thread = threading.Thread(target=run_mcp, daemon=True)
+    thread.start()
+
+    st.session_state.mcp_started = True
 
 # ── yfinance crumb fix — must be set before any yfinance calls ─────────────────
 import requests as _requests
