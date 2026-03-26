@@ -14,3 +14,10 @@ twelvedata
 requests
 mcp
 anthropic
+faiss-cpu
+sentence-transformers
+langchain
+wikipedia
+langchain-community
+langchain-huggingface
+langchain-text-splitters

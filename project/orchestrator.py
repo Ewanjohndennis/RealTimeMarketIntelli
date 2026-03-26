@@ -29,6 +29,7 @@ def run_pipeline(context):
     )
 
     brief = chief_agent(
+        company,
         news_out,
         comp_out,
         fin_out

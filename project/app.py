@@ -1,6 +1,7 @@
 import io, sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
+import feedparser
+import re
 import time
 import pandas as pd
 import plotly.graph_objects as go
@@ -157,6 +158,7 @@ def resolve_ticker(keyword: str) -> str | None:
 # ══════════════════════════════════════════════════════════════════════════════
 # DATA FETCHERS
 # ══════════════════════════════════════════════════════════════════════════════
+@st.cache_data(ttl=3600)
 def fetch_trend(keyword: str) -> pd.DataFrame:
     """Fetch Google Trends data via SerpAPI (falls back to empty if unavailable)."""
     if not SERP_API_KEY:
@@ -176,51 +178,27 @@ def fetch_trend(keyword: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def fetch_news(keyword: str, num: int = 6) -> list:
-    """Fetch news — uses SerpAPI if available, falls back to NewsAPI."""
-    if SERP_API_KEY:
-        try:
-            data = GoogleSearch({
-                "engine": "google", "q": f"{keyword} news",
-                "tbm": "nws", "num": num, "api_key": SERP_API_KEY,
-            }).get_dict()
-            return [
-                {
-                    "title":   r.get("title", ""),
-                    "source":  r.get("source", ""),
-                    "date":    r.get("date", ""),
-                    "snippet": r.get("snippet", ""),
-                    "link":    r.get("link", ""),
-                }
-                for r in data.get("news_results", [])
-            ]
-        except Exception:
-            pass
-    # Fallback to NewsAPI
-    if NEWS_API_KEY:
-        try:
-            r = requests.get(
-                "https://newsapi.org/v2/everything",
-                params={
-                    "q": keyword, "pageSize": num, "apiKey": NEWS_API_KEY,
-                    "language": "en", "sortBy": "publishedAt",
-                },
-                timeout=10,
-            )
-            return [
-                {
-                    "title":   a.get("title", ""),
-                    "source":  a["source"]["name"],
-                    "date":    a["publishedAt"],
-                    "snippet": a.get("description", ""),
-                    "link":    a["url"],
-                }
-                for a in r.json().get("articles", [])[:num]
-            ]
-        except Exception:
-            pass
-    return []
+def fetch_news(keyword: str, num: int = 6):
 
+    url = f"https://news.google.com/rss/search?q={keyword}&hl=en-IN&gl=IN&ceid=IN:en"
+    feed = feedparser.parse(url)
+
+    articles = []
+
+    for entry in feed.entries[:num]:
+
+        # remove HTML tags
+        snippet = re.sub('<.*?>', '', entry.summary)
+
+        articles.append({
+            "title": entry.title,
+            "source": entry.source.title if "source" in entry else "Google News",
+            "date": entry.published,
+            "snippet": snippet,
+            "link": entry.link
+        })
+
+    return articles
 def fetch_stock_price(ticker: str) -> pd.DataFrame:
     for use_session in [True, False]:
         try:
@@ -424,114 +402,250 @@ def render_financial_comparison(ticker_map: dict, financials: dict):
 # ══════════════════════════════════════════════════════════════════════════════
 # PDF REPORT GENERATOR
 # ══════════════════════════════════════════════════════════════════════════════
+def clean_ai_text(text: str) -> str:
+    if not text:
+        return ""
+
+    text = str(text)
+
+    # remove markdown formatting
+    text = text.replace("**", "")
+    text = text.replace("*", "")
+    text = text.replace("###", "")
+    text = text.replace("##", "")
+    text = text.replace("#", "")
+
+    # fix reportlab line breaks
+    text = text.replace("<br>", "<br/>")
+
+    # remove table-style markdown rows
+    text = re.sub(r"\|.*?\|", "", text)
+
+    # collapse multiple newlines
+    text = re.sub(r"\n{2,}", "\n", text)
+
+    return text.strip()
+
 def generate_pdf(company, competitors, brief, news_out, comp_out,
                  fin_out, improve_out, financials, ticker_map, generated_at) -> bytes:
+
+    # ---- clean AI outputs ----
+    brief = clean_ai_text(brief)
+    news_out = clean_ai_text(news_out)
+    comp_out = clean_ai_text(comp_out)
+    fin_out = clean_ai_text(fin_out)
+    improve_out = clean_ai_text(improve_out)
+
+    financials = financials or {}
+    ticker_map = ticker_map or {}
+
     buffer = io.BytesIO()
-    doc    = SimpleDocTemplate(
-        buffer, pagesize=letter,
-        leftMargin=0.75*inch, rightMargin=0.75*inch,
-        topMargin=0.75*inch, bottomMargin=0.75*inch,
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
     )
+
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("ReportTitle", parent=styles["Title"],
-        fontSize=22, spaceAfter=6, textColor=colors.HexColor("#1a1a2e"))
-    h1_style = ParagraphStyle("H1", parent=styles["Heading1"],
-        fontSize=14, spaceAfter=4, spaceBefore=12, textColor=colors.HexColor("#185FA5"))
-    body_style = ParagraphStyle("Body", parent=styles["Normal"],
-        fontSize=10, spaceAfter=6, leading=15)
-    caption_style = ParagraphStyle("Caption", parent=styles["Normal"],
-        fontSize=9, textColor=colors.HexColor("#666666"), spaceAfter=12)
+
+    title_style = ParagraphStyle(
+        "ReportTitle",
+        parent=styles["Title"],
+        fontSize=22,
+        spaceAfter=6,
+        textColor=colors.HexColor("#1a1a2e"),
+    )
+
+    h1_style = ParagraphStyle(
+        "H1",
+        parent=styles["Heading1"],
+        fontSize=14,
+        spaceAfter=4,
+        spaceBefore=12,
+        textColor=colors.HexColor("#185FA5"),
+    )
+
+    body_style = ParagraphStyle(
+        "Body",
+        parent=styles["Normal"],
+        fontSize=10,
+        spaceAfter=6,
+        leading=15,
+    )
+
+    caption_style = ParagraphStyle(
+        "Caption",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#666666"),
+        spaceAfter=12,
+    )
 
     story = []
 
     def add_section(title, content):
+
         story.append(Paragraph(title, h1_style))
-        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#185FA5")))
+
+        story.append(
+            HRFlowable(
+                width="100%",
+                thickness=0.5,
+                color=colors.HexColor("#185FA5"),
+            )
+        )
+
         story.append(Spacer(1, 6))
+
         for line in content.split("\n"):
             line = line.strip()
             if line:
                 story.append(Paragraph(line, body_style))
+
         story.append(Spacer(1, 10))
 
-    story.append(Spacer(1, 0.5*inch))
-    story.append(Paragraph(f"{company}", title_style))
+    # ---- Cover ----
+
+    story.append(Spacer(1, 0.5 * inch))
+
+    story.append(Paragraph(company, title_style))
     story.append(Paragraph("Intelligence Report", styles["Heading2"]))
+
     story.append(Spacer(1, 6))
+
     story.append(Paragraph(f"Generated: {generated_at}", caption_style))
+
     if competitors:
-        story.append(Paragraph(f"Benchmarked against: {', '.join(competitors)}", caption_style))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#185FA5")))
-    story.append(Spacer(1, 0.2*inch))
+        story.append(
+            Paragraph(
+                f"Benchmarked against: {', '.join(competitors)}",
+                caption_style,
+            )
+        )
+
+    story.append(
+        HRFlowable(
+            width="100%",
+            thickness=1,
+            color=colors.HexColor("#185FA5"),
+        )
+    )
+
+    story.append(Spacer(1, 0.2 * inch))
+
     add_section("Executive Brief", brief)
+
     story.append(PageBreak())
 
-    # Financial metrics table
+    # ---- Financial table ----
+
     story.append(Paragraph("Financial Metrics", h1_style))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#185FA5")))
+
+    story.append(
+        HRFlowable(
+            width="100%",
+            thickness=0.5,
+            color=colors.HexColor("#185FA5"),
+        )
+    )
+
     story.append(Spacer(1, 8))
+
     pdf_metrics = [
-        ("Current Price",    "current_price",   lambda v: f"${v:.2f}"),
-        ("Market Cap",       "market_cap",       lambda v: f"${v/1e9:.1f}B"),
-        ("TTM Revenue",      "revenue_ttm",      lambda v: f"${v/1e9:.1f}B"),
-        ("Gross Margin",     "gross_margin",     lambda v: f"{v*100:.1f}%"),
+        ("Current Price", "current_price", lambda v: f"${v:.2f}"),
+        ("Market Cap", "market_cap", lambda v: f"${v/1e9:.1f}B"),
+        ("TTM Revenue", "revenue_ttm", lambda v: f"${v/1e9:.1f}B"),
+        ("Gross Margin", "gross_margin", lambda v: f"{v*100:.1f}%"),
         ("Operating Margin", "operating_margin", lambda v: f"{v*100:.1f}%"),
-        ("P/E Ratio",        "pe_ratio",         lambda v: f"{v:.1f}x"),
-        ("EPS",              "eps",              lambda v: f"${v:.2f}"),
+        ("P/E Ratio", "pe_ratio", lambda v: f"{v:.1f}x"),
+        ("EPS", "eps", lambda v: f"${v:.2f}"),
         ("Return on Equity", "return_on_equity", lambda v: f"{v*100:.1f}%"),
-        ("52W High",         "52w_high",         lambda v: f"${float(v):.2f}"),
-        ("52W Low",          "52w_low",          lambda v: f"${float(v):.2f}"),
+        ("52W High", "52w_high", lambda v: f"${float(v):.2f}"),
+        ("52W Low", "52w_low", lambda v: f"${float(v):.2f}"),
     ]
+
     company_list = list(ticker_map.keys())
-    table_data   = [["Metric"] + company_list]
+
+    table_data = [["Metric"] + company_list]
+
     for label, key, fmt in pdf_metrics:
+
         row = [label]
+
         for comp in company_list:
+
             ticker = ticker_map.get(comp, "")
-            fin    = financials.get(ticker, {})
-            val    = fin.get(key, 0)
+
+            fin = financials.get(ticker, {})
+
+            val = fin.get(key, None)
+
             try:
                 row.append(fmt(val) if val else "N/A")
-            except Exception:
+            except:
                 row.append("N/A")
+
         table_data.append(row)
-    col_count  = len(["Metric"] + company_list)
-    col_width  = (6.5 * inch) / col_count
+
+    col_count = len(table_data[0])
+    col_width = (6.5 * inch) / col_count
+
     tbl = Table(table_data, colWidths=[col_width] * col_count)
-    tbl.setStyle(TableStyle([
-        ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor("#185FA5")),
-        ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
-        ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
-        ("FONTSIZE",       (0, 0), (-1, 0),  10),
-        ("ALIGN",          (0, 0), (-1, -1), "CENTER"),
-        ("FONTSIZE",       (0, 1), (-1, -1), 9),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f5f8ff"), colors.white]),
-        ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
-        ("LEFTPADDING",    (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING",   (0, 0), (-1, -1), 6),
-        ("TOPPADDING",     (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING",  (0, 0), (-1, -1), 5),
-        ("FONTNAME",       (0, 1), (0, -1),  "Helvetica-Bold"),
-    ]))
+
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#185FA5")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+                 [colors.HexColor("#f5f8ff"), colors.white]),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+            ]
+        )
+    )
+
     story.append(tbl)
+
     story.append(Spacer(1, 16))
+
     story.append(PageBreak())
 
     add_section("News & Sentiment Analysis", news_out)
-    add_section("Competitor Analysis",       comp_out)
-    add_section("Financial Analysis",        fin_out)
+    add_section("Competitor Analysis", comp_out)
+    add_section("Financial Analysis", fin_out)
+
     story.append(PageBreak())
+
     add_section("Strategic Recommendations", improve_out)
 
-    story.append(Spacer(1, 0.3*inch))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
-    story.append(Paragraph(
-        "Auto-generated by Company Intelligence Dashboard. "
-        "Data sourced from Google Trends, Google News, and Yahoo Finance.",
-        caption_style,
-    ))
+    story.append(Spacer(1, 0.3 * inch))
+
+    story.append(
+        HRFlowable(
+            width="100%",
+            thickness=0.5,
+            color=colors.HexColor("#cccccc"),
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Auto-generated by Company Intelligence Dashboard. "
+            "Data sourced from Google Trends, Google News, and Yahoo Finance.",
+            caption_style,
+        )
+    )
+
     doc.build(story)
+
     buffer.seek(0)
+
     return buffer.read()
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -2,6 +2,7 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from project.llm import ask_llm
+from tools.rag_tools import search_company_knowledge
 
 SYSTEM = """
 You are the Chief Intelligence Officer.
@@ -16,11 +17,21 @@ Sections:
 5 Strategic Recommendations
 """
 
-def run(news, comp, fin):
+def run(company, news, comp, fin):
+
+    knowledge = search_company_knowledge(
+        company,
+        "company strategy market positioning long term strategy"
+    )
 
     return ask_llm(
         SYSTEM,
         f"""
+Company: {company}
+
+Background knowledge:
+{knowledge}
+
 News analysis:
 {news}
 
