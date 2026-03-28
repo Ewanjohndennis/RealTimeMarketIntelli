@@ -1,6 +1,7 @@
-import io, sys, os
+import io, sys, os, json
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import feedparser
+from urllib.parse import quote
 import re
 import time
 import pandas as pd
@@ -8,21 +9,12 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 import yfinance as yf
-
+from pdf_generator import clean_ai_text, generate_pdf, render_report_upload_section
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from serpapi import GoogleSearch
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table,
-    TableStyle, HRFlowable, PageBreak,
-)
-
 from project.orchestrator import run_pipeline
 
 load_dotenv()
@@ -180,14 +172,15 @@ def fetch_trend(keyword: str) -> pd.DataFrame:
 @st.cache_data(ttl=3600)
 def fetch_news(keyword: str, num: int = 6):
 
-    url = f"https://news.google.com/rss/search?q={keyword}&hl=en-IN&gl=IN&ceid=IN:en"
+    encoded_keyword = quote(keyword)
+
+    url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl=en-IN&gl=IN&ceid=IN:en"
     feed = feedparser.parse(url)
 
     articles = []
 
     for entry in feed.entries[:num]:
 
-        # remove HTML tags
         snippet = re.sub('<.*?>', '', entry.summary)
 
         articles.append({
@@ -400,255 +393,6 @@ def render_financial_comparison(ticker_map: dict, financials: dict):
     st.plotly_chart(bar_fig, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PDF REPORT GENERATOR
-# ══════════════════════════════════════════════════════════════════════════════
-def clean_ai_text(text: str) -> str:
-    if not text:
-        return ""
-
-    text = str(text)
-
-    # remove markdown formatting
-    text = text.replace("**", "")
-    text = text.replace("*", "")
-    text = text.replace("###", "")
-    text = text.replace("##", "")
-    text = text.replace("#", "")
-
-    # fix reportlab line breaks
-    text = text.replace("<br>", "<br/>")
-
-    # remove table-style markdown rows
-    text = re.sub(r"\|.*?\|", "", text)
-
-    # collapse multiple newlines
-    text = re.sub(r"\n{2,}", "\n", text)
-
-    return text.strip()
-
-def generate_pdf(company, competitors, brief, news_out, comp_out,
-                 fin_out, improve_out, financials, ticker_map, generated_at) -> bytes:
-
-    # ---- clean AI outputs ----
-    brief = clean_ai_text(brief)
-    news_out = clean_ai_text(news_out)
-    comp_out = clean_ai_text(comp_out)
-    fin_out = clean_ai_text(fin_out)
-    improve_out = clean_ai_text(improve_out)
-
-    financials = financials or {}
-    ticker_map = ticker_map or {}
-
-    buffer = io.BytesIO()
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        leftMargin=0.75 * inch,
-        rightMargin=0.75 * inch,
-        topMargin=0.75 * inch,
-        bottomMargin=0.75 * inch,
-    )
-
-    styles = getSampleStyleSheet()
-
-    title_style = ParagraphStyle(
-        "ReportTitle",
-        parent=styles["Title"],
-        fontSize=22,
-        spaceAfter=6,
-        textColor=colors.HexColor("#1a1a2e"),
-    )
-
-    h1_style = ParagraphStyle(
-        "H1",
-        parent=styles["Heading1"],
-        fontSize=14,
-        spaceAfter=4,
-        spaceBefore=12,
-        textColor=colors.HexColor("#185FA5"),
-    )
-
-    body_style = ParagraphStyle(
-        "Body",
-        parent=styles["Normal"],
-        fontSize=10,
-        spaceAfter=6,
-        leading=15,
-    )
-
-    caption_style = ParagraphStyle(
-        "Caption",
-        parent=styles["Normal"],
-        fontSize=9,
-        textColor=colors.HexColor("#666666"),
-        spaceAfter=12,
-    )
-
-    story = []
-
-    def add_section(title, content):
-
-        story.append(Paragraph(title, h1_style))
-
-        story.append(
-            HRFlowable(
-                width="100%",
-                thickness=0.5,
-                color=colors.HexColor("#185FA5"),
-            )
-        )
-
-        story.append(Spacer(1, 6))
-
-        for line in content.split("\n"):
-            line = line.strip()
-            if line:
-                story.append(Paragraph(line, body_style))
-
-        story.append(Spacer(1, 10))
-
-    # ---- Cover ----
-
-    story.append(Spacer(1, 0.5 * inch))
-
-    story.append(Paragraph(company, title_style))
-    story.append(Paragraph("Intelligence Report", styles["Heading2"]))
-
-    story.append(Spacer(1, 6))
-
-    story.append(Paragraph(f"Generated: {generated_at}", caption_style))
-
-    if competitors:
-        story.append(
-            Paragraph(
-                f"Benchmarked against: {', '.join(competitors)}",
-                caption_style,
-            )
-        )
-
-    story.append(
-        HRFlowable(
-            width="100%",
-            thickness=1,
-            color=colors.HexColor("#185FA5"),
-        )
-    )
-
-    story.append(Spacer(1, 0.2 * inch))
-
-    add_section("Executive Brief", brief)
-
-    story.append(PageBreak())
-
-    # ---- Financial table ----
-
-    story.append(Paragraph("Financial Metrics", h1_style))
-
-    story.append(
-        HRFlowable(
-            width="100%",
-            thickness=0.5,
-            color=colors.HexColor("#185FA5"),
-        )
-    )
-
-    story.append(Spacer(1, 8))
-
-    pdf_metrics = [
-        ("Current Price", "current_price", lambda v: f"${v:.2f}"),
-        ("Market Cap", "market_cap", lambda v: f"${v/1e9:.1f}B"),
-        ("TTM Revenue", "revenue_ttm", lambda v: f"${v/1e9:.1f}B"),
-        ("Gross Margin", "gross_margin", lambda v: f"{v*100:.1f}%"),
-        ("Operating Margin", "operating_margin", lambda v: f"{v*100:.1f}%"),
-        ("P/E Ratio", "pe_ratio", lambda v: f"{v:.1f}x"),
-        ("EPS", "eps", lambda v: f"${v:.2f}"),
-        ("Return on Equity", "return_on_equity", lambda v: f"{v*100:.1f}%"),
-        ("52W High", "52w_high", lambda v: f"${float(v):.2f}"),
-        ("52W Low", "52w_low", lambda v: f"${float(v):.2f}"),
-    ]
-
-    company_list = list(ticker_map.keys())
-
-    table_data = [["Metric"] + company_list]
-
-    for label, key, fmt in pdf_metrics:
-
-        row = [label]
-
-        for comp in company_list:
-
-            ticker = ticker_map.get(comp, "")
-
-            fin = financials.get(ticker, {})
-
-            val = fin.get(key, None)
-
-            try:
-                row.append(fmt(val) if val else "N/A")
-            except:
-                row.append("N/A")
-
-        table_data.append(row)
-
-    col_count = len(table_data[0])
-    col_width = (6.5 * inch) / col_count
-
-    tbl = Table(table_data, colWidths=[col_width] * col_count)
-
-    tbl.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#185FA5")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-                 [colors.HexColor("#f5f8ff"), colors.white]),
-                ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
-            ]
-        )
-    )
-
-    story.append(tbl)
-
-    story.append(Spacer(1, 16))
-
-    story.append(PageBreak())
-
-    add_section("News & Sentiment Analysis", news_out)
-    add_section("Competitor Analysis", comp_out)
-    add_section("Financial Analysis", fin_out)
-
-    story.append(PageBreak())
-
-    add_section("Strategic Recommendations", improve_out)
-
-    story.append(Spacer(1, 0.3 * inch))
-
-    story.append(
-        HRFlowable(
-            width="100%",
-            thickness=0.5,
-            color=colors.HexColor("#cccccc"),
-        )
-    )
-
-    story.append(
-        Paragraph(
-            "Auto-generated by Company Intelligence Dashboard. "
-            "Data sourced from Google Trends, Google News, and Yahoo Finance.",
-            caption_style,
-        )
-    )
-
-    doc.build(story)
-
-    buffer.seek(0)
-
-    return buffer.read()
-
-# ══════════════════════════════════════════════════════════════════════════════
 # MAIN DASHBOARD
 # ══════════════════════════════════════════════════════════════════════════════
 def render_dashboard(settings: dict):
@@ -727,13 +471,10 @@ def render_dashboard(settings: dict):
     comp_out    = results.get("competitor", "")
     fin_out     = results.get("financial", "")
     brief       = results.get("brief", "")
+    improvement = results.get("improvement", "")
 
     # Extract strategic recommendations section
-    if "---RECOMMENDATIONS---" in brief:
-        improve_out = brief.split("---RECOMMENDATIONS---")[-1].strip()
-    else:
-        lines = brief.split("\n")
-        improve_out = "\n".join(lines[int(len(lines)*0.6):]).strip() or brief
+    improve_out=improvement
 
     generated_at = datetime.now().strftime("%B %d, %Y %H:%M")
 
@@ -741,21 +482,21 @@ def render_dashboard(settings: dict):
     st.title(f"🧠 {company} — Intelligence Dashboard")
     st.caption(f"Report generated · {generated_at}")
 
-    # ── PDF download ───────────────────────────────────────────────────────────
+# ── PDF download ─────────────────────────────────────────────────────
     try:
         pdf_bytes = generate_pdf(
-            company, competitors, brief, news_out, comp_out,
-            fin_out, improve_out, financials, ticker_map, generated_at,
-        )
+                company, competitors, brief, news_out, comp_out,
+                fin_out, improve_out, financials, ticker_map, generated_at,
+            )
         st.download_button(
-            label="📄 Download Full Report (PDF)",
-            data=pdf_bytes,
-            file_name=f"{company.replace(' ', '_')}_Intelligence_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
-            mime="application/pdf",
-            type="primary",
-        )
+                label="📄 Download Full Report (PDF)",
+                data=pdf_bytes,
+                file_name=f"{company.replace(' ', '_')}_Intelligence_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf",
+                type="primary",
+            )
     except Exception as e:
-        st.warning(f"PDF generation unavailable: {e}")
+            st.warning(f"PDF generation unavailable: {e}")
 
     st.divider()
 
@@ -765,11 +506,12 @@ def render_dashboard(settings: dict):
     st.divider()
 
     # ── Tabs ───────────────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📰 News & Sentiment",
         "⚔️ Competitor Analysis",
         "💰 Financials",
         "🎯 What to Improve",
+        "📄 Report Forecasting",
     ])
 
     # ── Tab 1 — News ──────────────────────────────────────────────────────────
@@ -833,14 +575,26 @@ def render_dashboard(settings: dict):
             )
 
             st.subheader("AI Financial Analysis")
-            st.markdown(fin_out)
-        else:
-            st.warning("Could not resolve any stock tickers automatically.")
+            sections = fin_out.split("RISKS:")
 
+            growth_text = sections[0].replace("GROWTH SIGNALS:", "").strip()
+            risk_text = sections[1].strip() if len(sections) > 1 else ""
+
+            st.markdown("### 📈 Growth Signals")
+            st.markdown(growth_text)
+
+            st.markdown("### ⚠️ Risks")
+            st.markdown(risk_text)
     # ── Tab 4 — What to Improve ───────────────────────────────────────────────
     with tab4:
         st.subheader(f"🎯 What {company} Should Improve")
         st.markdown(improve_out)
+
+    with tab5:
+        render_report_upload_section(
+        default_ticker=ticker_map.get(company, ""),
+        default_topic=company,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

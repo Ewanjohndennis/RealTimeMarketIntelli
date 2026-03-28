@@ -9,6 +9,20 @@ You are a Competitor Analyst.
 Compare the company against competitors using trends and news.
 """
 
+def detect_competitors(company: str):
+    prompt = f"""
+    List the top 5 direct competitors of {company}.
+    Return ONLY a comma-separated list.
+    """
+
+    # however you're calling your LLM
+    response = ask_llm(prompt)
+
+    import re
+    competitors = re.split(r",|\n", response)
+
+    return [c.strip() for c in competitors if c.strip()]
+
 def run(company, competitors, trends):
 
     knowledge = search_company_knowledge(

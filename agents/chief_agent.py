@@ -9,12 +9,28 @@ You are the Chief Intelligence Officer.
 
 Merge analyst reports into an executive brief.
 
-Sections:
-1 Company Pulse
-2 Competitive Position
-3 Financial Health
-4 Key Risks
-5 Strategic Recommendations
+EXECUTIVE BRIEF:
+
+Provide EXACTLY 5 bullet points.
+
+Each bullet must:
+- Be ONE complete sentence
+- Be 100-120 words
+- Contain specific insight (not generic labels)
+
+Cover:
+1. Market position (with reason)
+2. Key strength (with explanation)
+3. Key weakness (with implication)
+4. Growth opportunity (with impact)
+5. Risk (with consequence)
+
+Avoid:
+- single words
+- vague terms like "leader", "strong", "good"
+- repeating section names
+
+Be sharp, specific, and analytical.
 """
 
 def run(company, news, comp, fin):

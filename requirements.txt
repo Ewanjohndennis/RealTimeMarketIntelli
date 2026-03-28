@@ -21,3 +21,8 @@ wikipedia
 langchain-community
 langchain-huggingface
 langchain-text-splitters
+torch
+vaderSentiment
+feedparser
+pdfplumber
+ollama
