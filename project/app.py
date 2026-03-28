@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from serpapi import GoogleSearch
 from project.orchestrator import run_pipeline
+from style import inject_css, render_news_card, render_metric_card, render_section_badge
 
 load_dotenv()
 
@@ -41,8 +42,9 @@ st.set_page_config(
     page_title="Company Intelligence Dashboard",
     page_icon="🧠",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
-
+inject_css()
 # ══════════════════════════════════════════════════════════════════════════════
 # DATABASE
 # ══════════════════════════════════════════════════════════════════════════════
@@ -520,10 +522,7 @@ def render_dashboard(settings: dict):
         with col1:
             st.subheader(f"Latest News — {company}")
             for article in company_news:
-                st.markdown(f"**[{article['title']}]({article['link']})**")
-                st.caption(f"{article['source']}  ·  {article['date']}")
-                st.write(article["snippet"])
-                st.markdown("---")
+                render_news_card(article)
         with col2:
             st.subheader("AI News Analysis")
             st.markdown(news_out)
@@ -540,15 +539,13 @@ def render_dashboard(settings: dict):
         else:
             st.info("Google Trends data unavailable (SerpAPI key not set).")
 
-        if competitors:
-            st.subheader("Competitor News")
-            comp_tabs = st.tabs(competitors)
-            for ctab, comp in zip(comp_tabs, competitors):
-                with ctab:
-                    for article in comp_news.get(comp, []):
-                        st.markdown(f"**[{article['title']}]({article['link']})**")
-                        st.caption(f"{article['source']}  ·  {article['date']}")
-                        st.markdown("---")
+    if competitors:
+        st.subheader("Competitor News")
+        comp_tabs = st.tabs(competitors)
+        for ctab, comp in zip(comp_tabs, competitors):
+            with ctab:
+                for article in comp_news.get(comp, []):
+                    render_news_card(article)
 
         st.subheader("AI Competitor Analysis")
         st.markdown(comp_out)
@@ -556,6 +553,18 @@ def render_dashboard(settings: dict):
     # ── Tab 3 — Financials ────────────────────────────────────────────────────
     with tab3:
         if ticker_map:
+            company_fin = financials.get(ticker_map.get(company, ""), {})
+            if company_fin:
+                cols = st.columns(4)
+                kpis = [
+                ("Current Price",  f"${company_fin.get('current_price', 0):.2f}", "", True),
+                ("Market Cap",     f"${company_fin.get('market_cap', 0)/1e9:.1f}B", "", True),
+                ("P/E Ratio",      f"{company_fin.get('pe_ratio', 0):.1f}x", "", True),
+                ("Gross Margin",   f"{company_fin.get('gross_margin', 0)*100:.1f}%", "", True),
+            ]
+            for col, (label, val, delta, up) in zip(cols, kpis):
+                with col:
+                    render_metric_card(label, val, delta, up)
             all_tickers = list(ticker_map.values())
 
             st.subheader("📈 Stock Price (Last 12 Months)")
