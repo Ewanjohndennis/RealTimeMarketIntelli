@@ -539,16 +539,16 @@ def render_dashboard(settings: dict):
         else:
             st.info("Google Trends data unavailable (SerpAPI key not set).")
 
-    if competitors:
-        st.subheader("Competitor News")
-        comp_tabs = st.tabs(competitors)
-        for ctab, comp in zip(comp_tabs, competitors):
-            with ctab:
-                for article in comp_news.get(comp, []):
-                    render_news_card(article)
+        if competitors:
+            st.subheader("Competitor News")
+            comp_tabs = st.tabs(competitors)
+            for ctab, comp in zip(comp_tabs, competitors):
+                with ctab:
+                    for article in comp_news.get(comp, []):
+                        render_news_card(article)
 
-        st.subheader("AI Competitor Analysis")
-        st.markdown(comp_out)
+            st.subheader("AI Competitor Analysis")
+            st.markdown(comp_out)
 
     # ── Tab 3 — Financials ────────────────────────────────────────────────────
     with tab3:
