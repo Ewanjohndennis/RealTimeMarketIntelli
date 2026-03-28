@@ -36,20 +36,17 @@ IMPORTANT:
 - Only plain text bullets
 """
 
-def run(company, financials):
-
-    knowledge = search_company_knowledge(
-        company,
-        "financial performance strategy business model"
+def run(company, financials, knowledge=None):
+    knowledge_text = knowledge or search_company_knowledge(
+        company, "financial performance strategy business model"
     )
-
     return ask_llm(
         SYSTEM,
         f"""
 Company: {company}
 
 Background knowledge:
-{knowledge}
+{knowledge_text}
 
 Financial summary:
 {financials}

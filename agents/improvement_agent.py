@@ -1,6 +1,7 @@
 from project.llm import ask_llm
-def run(company, news_out, comp_out, fin_out):
-    
+
+def run(company, combined):
+
     SYSTEM = """
 You are a strategy consultant.
 
@@ -10,14 +11,8 @@ Generate business recommendations based on company insights.
     USER = f"""
 Company: {company}
 
-News Insights:
-{news_out}
-
-Competitive Analysis:
-{comp_out}
-
-Financial Insights:
-{fin_out}
+Insights:
+{combined}
 
 ---
 

@@ -32,29 +32,19 @@ Avoid:
 
 Be sharp, specific, and analytical.
 """
-
-def run(company, news, comp, fin):
-
-    knowledge = search_company_knowledge(
-        company,
-        "company strategy market positioning long term strategy"
+def run(company, combined, knowledge=None):
+    knowledge_text = knowledge or search_company_knowledge(
+        company, "company strategy market positioning long term strategy"
     )
-
     return ask_llm(
         SYSTEM,
         f"""
 Company: {company}
 
 Background knowledge:
-{knowledge}
+{knowledge_text}
 
 News analysis:
-{news}
-
-Competitor analysis:
-{comp}
-
-Financial analysis:
-{fin}
+{combined}
 """
     )

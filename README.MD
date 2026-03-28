@@ -1,22 +1,25 @@
-# 📊 Real-Time Industry Insight & Strategic Intelligence System
+# 🧠 Real-Time Industry Insight & Strategic Intelligence System
 
 > **Infosys Springboard – Artificial Intelligence Internship Project**
 
-An AI-powered, multi-agent strategic intelligence platform that delivers real-time market analysis, financial insights, and industry trend monitoring. Built with a LangChain-powered agentic architecture, RAG (Retrieval-Augmented Generation), and live data integrations to help businesses make data-driven decisions.
+An AI-powered, multi-agent strategic intelligence platform that delivers real-time market analysis, competitive intelligence, financial insights, and actionable recommendations. Configured once by an admin — every employee sees a live, auto-refreshing intelligence dashboard for their company.
 
 ---
 
 ## 🚀 Features
 
-- **Real-Time Market Data** — Live stock prices and financial metrics via `yfinance` and `TwelveData`
-- **AI-Powered Analysis** — LLM-driven insight generation using openai/gpt-oss-20b model from HuggingFace
-- **Multi-Agent Architecture** — Specialized agents for market research, financial analysis, and strategic synthesis
-- **RAG Knowledge Base** — FAISS vector store with `sentence-transformers` for contextual document retrieval
-- **Web Intelligence** — Live web search via Google News RSS, SerpAPI (`google-search-results`) and Wikipedia integration
-- **Interactive Dashboard** — Streamlit-based UI with Plotly and Matplotlib visualizations
-- **Report Generation** — Automated PDF report export with ReportLab
-- **Persistent Storage** — MongoDB for data persistence and history tracking
-- **MCP Integration** — Model Context Protocol support for extended tool connectivity
+- 🔐 **Role-Based Authentication** — Admin and Employee login with session state management
+- ⚙️ **Admin Control Panel** — Set target company and competitors via sidebar; config persisted in MongoDB Atlas so all users share the same state
+- 🤖 **Auto Competitor Detection** — Orchestrator automatically identifies top competitors via LLM if not set manually
+- 📰 **News Intelligence** — Google News RSS feed with AI-driven opportunity and risk extraction per company
+- ⚔️ **Competitor Analysis** — Per-competitor news tabs, Google Trends search interest comparison, and AI competitive analysis
+- 💰 **Financial Dashboard** — 12-month stock price chart, quarterly revenue bars, and a 12-metric comparison table (Market Cap, P/E, Gross Margin, ROE, EPS, and more) via `yfinance`
+- 🎯 **Strategic Recommendations** — AI-generated improvement plan in `[Action] → [Impact]` format
+- 📋 **Executive Brief** — 5-point C-suite summary synthesized from all agent outputs
+- 📈 **LSTM Forecasting** — 2-layer stacked LSTM model (PyTorch) for stock price prediction
+- 📄 **PDF Export** — Full intelligence report download via ReportLab
+- ⚡ **Parallel Execution** — Data fetching and AI agents both run concurrently via `ThreadPoolExecutor`
+- 🎨 **Premium UI** — Custom dark theme with gold accents injected via Streamlit CSS
 
 ---
 
@@ -25,37 +28,70 @@ An AI-powered, multi-agent strategic intelligence platform that delivers real-ti
 ```
 RealTimeMarketIntelli/
 │
-├── agents/                  # AI agent definitions (market, financial, strategy agents)
+├── agents/
+│   ├── news_agent.py          # Extracts opportunities & risks from headlines
+│   ├── competitor_agent.py    # Competitive positioning + detect_competitors()
+│   ├── financial_agent.py     # Growth signals and risk from financial data
+│   ├── chief_agent.py         # Synthesizes all reports into executive brief
+│   ├── improvement_agent.py   # Strategic recommendations
+│   └── forecasting_agent.py   # LSTM-based stock price forecasting
+│
+├── project/
+│   ├── app.py                 # Main Streamlit application
+│   ├── orchestrator.py        # Pipeline coordinator (parallel agent execution)
+│   ├── llm.py                 # HuggingFace InferenceClient wrapper
+│   └── pdf_generator.py       # ReportLab PDF export
+│
+├── tools/
+│   └── rag_tools.py           # RAG knowledge base search
+│
 ├── data/
-│   └── knowledge/           # Knowledge base documents for RAG ingestion
-├── tools/                   # Custom tool implementations (search, finance, scraping)
-├── vector_store/            # FAISS vector store indexes and embeddings
-├── project/                 # Core application logic and orchestration
-├── requirements.txt         # Python dependencies
-├── package.json             # Node.js dependencies (MongoDB driver)
+│   └── knowledge/             # Domain knowledge documents for RAG
+│
+├── vector_store/              # Embedded vector indexes
+├── requirements.txt
 └── .gitignore
 ```
 
 ---
 
-## 🧠 Architecture Overview
-
-The system follows a multi-agent RAG pipeline:
+## 🧠 Architecture
 
 ```
-User Query
-    │
-    ▼
-Orchestrator Agent
-    │
-    ├──► Market Data Agent  ──► yfinance / TwelveData
-    ├──► Research Agent     ──► Google News RSS, SerpAPI / Wikipedia
-    ├──► RAG Agent          ──► FAISS Vector Store + HuggingFace Embeddings
-    └──► Synthesis Agent    ──► HuggingFace Model
-                │
-                ▼
-        Streamlit Dashboard  ──►  PDF Report
+                        ┌──────────────────────────┐
+                        │      Streamlit UI         │
+                        │  Role-based · Wide layout │
+                        └────────────┬─────────────┘
+                                     │
+                             ┌───────▼────────┐
+                             │  Orchestrator  │
+                             │  run_pipeline  │
+                             └───────┬────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    │   PARALLEL     │   EXECUTION     │
+                    ▼                ▼                 ▼
+             news_agent      competitor_agent   financial_agent
+            (RSS + RAG)      (Trends + RAG)    (yfinance + RAG)
+                    │                │                 │
+                    └────────────────┼─────────────────┘
+                                     │ combined output
+                              ┌──────┴──────┐
+                              │  PARALLEL   │
+                    ┌─────────▼──┐     ┌────▼────────────┐
+                    │ chief_agent│     │improvement_agent │
+                    │ (brief)    │     │(recommendations) │
+                    └────────────┘     └─────────────────┘
+                                     │
+                        ┌────────────▼────────────┐
+                        │     Streamlit Dashboard  │
+                        │  News · Competitors ·    │
+                        │  Financials · Strategy · │
+                        │  Forecasting · PDF       │
+                        └─────────────────────────┘
 ```
+
+**RAG flow:** Each agent receives pre-fetched knowledge from `search_company_knowledge()` — called once in the orchestrator and shared across all agents to avoid redundant vector store queries.
 
 ---
 
@@ -63,26 +99,28 @@ Orchestrator Agent
 
 | Layer | Technology |
 |---|---|
-| **Frontend / UI** | Streamlit, Plotly, Matplotlib |
-| **AI / LLM** | Groq, Anthropic Claude, HuggingFace |
-| **Agents / Chains** | LangChain, LangChain-Community |
-| **Vector Store** | FAISS, Sentence Transformers |
-| **Market Data** | yfinance, TwelveData |
-| **Web Search** | Google News RSS, SerpAPI (google-search-results), Wikipedia |
-| **Database** | MongoDB (PyMongo) |
-| **Report Export** | ReportLab |
-| **Protocol** | MCP (Model Context Protocol) |
+| **Frontend / UI** | Streamlit, Plotly, custom CSS theme |
+| **LLM** | Groq (`llama-3.3-70b-versatile` or similar) via `groq` SDK |
+| **Agent Framework** | Custom multi-agent orchestrator with `ThreadPoolExecutor` |
+| **RAG** | Sentence Transformers + custom vector store |
+| **News** | Google News RSS (`feedparser`), SerpAPI fallback |
+| **Market Data** | `yfinance` with custom `requests.Session` (User-Agent fix) |
+| **Trends** | SerpAPI Google Trends |
+| **Forecasting** | PyTorch LSTM (2-layer stacked) |
+| **Database** | MongoDB Atlas (shared config via `_id = "global_company_config"`) |
+| **PDF Export** | ReportLab |
 | **Environment** | python-dotenv |
 
 ---
 
-## ⚙️ Installation & Setup
+## ⚙️ Setup & Installation
 
 ### Prerequisites
 
 - Python 3.9+
-- Node.js 18+ (for MongoDB JS driver, optional)
-- API keys for: Groq, Anthropic, SerpAPI, TwelveData
+- MongoDB Atlas account
+- HuggingFace account (free tier works)
+- SerpAPI key (optional — used for Trends and news fallback)
 
 ### 1. Clone the Repository
 
@@ -95,117 +133,125 @@ cd RealTimeMarketIntelli
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # On Windows: venv\Scripts\activate
+# Windows
+venv\Scripts\activate
+# macOS/Linux
+source venv/bin/activate
 ```
 
-### 3. Install Python Dependencies
+### 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Install Node Dependencies (optional)
-
-```bash
-npm install
-```
-
-### 5. Configure Environment Variables
+### 4. Configure Environment Variables
 
 Create a `.env` file in the root directory:
 
 ```env
-SERPAPI_API_KEY=your_serpapi_api_key
-TWELVEDATA_API_KEY=your_twelvedata_api_key
-MONGODB_URI=your_mongodb_connection_string
+GROQ_API_KEY=your_groq_api_key
+SERP_API_KEY=your_serpapi_key
+MONGO_URI=your_mongodb_atlas_connection_string
 ```
 
-### 6. Run the Application
+> `NEWS_API_KEY` is optional — the system uses Google News RSS as the primary source and SerpAPI as fallback.
+
+### 5. Run the Application
 
 ```bash
 streamlit run project/app.py
 ```
 
-> ⚠️ Replace `project/app.py` with the actual entry point file name if different.
+Open `http://localhost:8501` in your browser.
 
 ---
 
-## 📦 Dependencies
+## 🔑 Default Login Credentials
 
-All Python dependencies are listed in [`requirements.txt`](./requirements.txt):
-
-```
-streamlit          # Web UI framework
-plotly             # Interactive charts
-pandas             # Data manipulation
-yfinance           # Yahoo Finance market data
-huggingface_hub    # HuggingFace model hub
-google-search-results  # SerpAPI web search
-python-dotenv      # Environment variable management
-matplotlib         # Data visualization
-groq               # Groq LLM API
-reportlab          # PDF report generation
-pymongo            # MongoDB client
-openai             # OpenAI-compatible API client
-twelvedata         # Real-time financial data API
-requests           # HTTP requests
-mcp                # Model Context Protocol
-faiss-cpu          # Vector similarity search
-sentence-transformers  # Text embeddings
-langchain          # LLM agent framework
-wikipedia          # Wikipedia data access
-langchain-community    # Community LangChain integrations
-langchain-huggingface  # HuggingFace LangChain integration
-langchain-text-splitters  # Document chunking
-```
-
----
-
-## 🔑 API Keys Required
-
-| Service | Purpose | Get Key |
+| Role | User ID | Password |
 |---|---|---|
-| SerpAPI | Real-time web search | [serpapi.com](https://serpapi.com) |
-| TwelveData | Financial market data | [twelvedata.com](https://twelvedata.com) |
-| MongoDB | Data persistence | [mongodb.com](https://www.mongodb.com/cloud/atlas) |
+| Admin | `admin` | `admin` |
+| Employee | `employee` | `1234` |
+
+> Admin users can set the target company and competitors from the sidebar. Employees see the generated dashboard automatically.
 
 ---
 
-## 📸 Usage
+## 📸 Usage Flow
 
-1. Launch the Streamlit app and open the dashboard in your browser (`http://localhost:8501`)
-2. Enter a company name, industry, or topic in the query field
-3. The system dispatches relevant agents to gather real-time data and knowledge base context
-4. View AI-generated insights, trend analysis, and financial summaries on the dashboard
-5. Export a full strategic intelligence report as a PDF
+1. **Login** as admin at `http://localhost:8501`
+2. **Open the sidebar** and enter your target company (e.g. `Apple`)
+3. Toggle **Auto-detect competitors** or enter them manually
+4. Click **Save & Load Dashboard** — config is saved to MongoDB
+5. The system fetches news, trends, and financial data in parallel, then runs the AI agent pipeline
+6. View results across 5 tabs: **News & Sentiment**, **Competitor Analysis**, **Financials**, **What to Improve**, **Forecasting**
+7. Click **Download Full Report (PDF)** to export
 
 ---
+
+## 🤖 Agent Pipeline
+
+| Agent | Input | Output |
+|---|---|---|
+| `news_agent` | Company news articles + RAG knowledge | Opportunities & risks from headlines |
+| `competitor_agent` | Competitors list + Google Trends + RAG | Competitive positioning analysis |
+| `financial_agent` | yfinance summary + RAG | Growth signals and financial risks |
+| `chief_agent` | Combined agent outputs + RAG | 5-point executive brief |
+| `improvement_agent` | Combined agent outputs | 5 strategic recommendations |
+| `forecasting_agent` | Historical stock data | LSTM price forecast |
+
+---
+
+## 🔑 API Keys
+
+| Service | Purpose | Link |
+|---|---|---|
+| HuggingFace | LLM inference (`openai/gpt-oss-20b`) | [huggingface.co](https://huggingface.co) |
+| SerpAPI | Google Trends + news fallback | [serpapi.com](https://serpapi.com) |
+| MongoDB Atlas | Shared config persistence | [mongodb.com/atlas](https://www.mongodb.com/cloud/atlas) |
+
+---
+
+## 🔄 LLM Backend History
+
+This project has been through more LLM providers than most projects have hot meals.
+
+The current backend is Groq (`llama-3.3-70b-versatile`) — but when the free tier limit hits, the codebase has a well-documented history of emergency provider swaps:
+
+| Provider | Status | Reason for Switch |
+|---|---|---|
+| Groq | ✅ Current | Fast inference, generous free tier |
+| HuggingFace | 🪦 Retired | Rate limit hit |
+| OpenRouter | 🪦 Retired | Ran out of credits |
+| Azure OpenAI | 🪦 Original | Trial expired |
+
+> If the app suddenly stops working, assume the token limit was hit and check which provider is next in the rotation. A new API key is usually 15 minutes away.
+
+The `project/llm.py` file is essentially a graveyard of commented-out provider configs, each one a timestamp of a deadline that was closer than the rate limit.
 
 ## 🎓 Internship Context
 
 This project was developed as part of the **Infosys Springboard Artificial Intelligence Internship**. It demonstrates practical application of:
 
-- Multi-agent AI system design
+- Multi-agent AI system design and orchestration
 - Retrieval-Augmented Generation (RAG)
-- Real-time data pipeline integration
-- LLM orchestration with LangChain
+- Real-time parallel data pipeline architecture
+- LLM prompt engineering and token optimization
 - Full-stack AI application development with Streamlit
-
----
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome. Feel free to open a pull request or raise an issue.
-
----
-
-## 📄 License
-
-This project is developed for educational purposes as part of the Infosys Springboard AI Internship program.
+- Time-series forecasting with LSTM (PyTorch)
+- Cloud database integration (MongoDB Atlas)
 
 ---
 
 ## 👤 Author
 
 **Ewan John Dennis**
+B.Tech Computer Science Engineering · Model Engineering College, Thrikkakara
 [GitHub](https://github.com/Ewanjohndennis)
+
+---
+
+## 📄 License
+
+Developed for educational purposes as part of the Infosys Springboard AI Internship program.

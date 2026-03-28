@@ -9,26 +9,22 @@ You are a News Analyst.
 Summarize opportunities and risks from news headlines.
 """
 
-def run(company, news):
-
-    knowledge = search_company_knowledge(company, "company strategy")
-
+def run(company, news, knowledge=None):
+    knowledge_text = knowledge or search_company_knowledge(company, "company strategy")
     headlines = "\n".join([
-    f"{a['title']} — {a['snippet']}"
-    for a in news
-])
-
+        f"{a['title']} — {a['snippet']}"
+        for a in news
+    ])
     result = ask_llm(
         SYSTEM,
         f"""
 Company: {company}
 
 Background Knowledge:
-{knowledge}
+{knowledge_text}
 
 News:
 {headlines}
 """
     )
-
     return result
