@@ -17,7 +17,7 @@ from pymongo import MongoClient
 from serpapi import GoogleSearch
 from project.orchestrator import run_pipeline
 from style import inject_css, render_news_card, render_metric_card, render_section_badge
-
+from intelligence_navigator import render_intelligence_navigator
 load_dotenv()
 
 # ── yfinance crumb fix — must be set before any yfinance calls ─────────────────
@@ -359,41 +359,42 @@ def render_financial_comparison(ticker_map: dict, financials: dict):
     df = pd.DataFrame(rows).T
     df.index.name = "Metric"
     st.dataframe(df, use_container_width=True)
-
-    st.subheader("📈 Key Metrics — Visual Comparison")
-    metric_choice = st.selectbox(
-        "Select metric to compare",
-        ["Market Cap ($B)", "TTM Revenue ($B)", "Gross Margin (%)",
-         "P/E Ratio", "Return on Equity (%)", "Operating Margin (%)"],
-    )
-    metric_map = {
-        "Market Cap ($B)":      ("market_cap",       lambda v: v / 1e9),
-        "TTM Revenue ($B)":     ("revenue_ttm",      lambda v: v / 1e9),
-        "Gross Margin (%)":     ("gross_margin",     lambda v: v * 100),
-        "P/E Ratio":            ("pe_ratio",         lambda v: v),
-        "Return on Equity (%)": ("return_on_equity", lambda v: v * 100),
-        "Operating Margin (%)": ("operating_margin", lambda v: v * 100),
-    }
-    key, transform = metric_map[metric_choice]
-    bar_fig = go.Figure()
-    for i, (company, ticker) in enumerate(ticker_map.items()):
-        fin = financials.get(ticker, {})
-        val = fin.get(key, 0)
-        color, _ = COLORS[i % len(COLORS)]
-        bar_fig.add_trace(go.Bar(
-            x=[company], y=[transform(val) if val else 0],
-            name=company, marker_color=color,
-        ))
-    bar_fig.update_layout(
-        height=320, barmode="group",
-        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(title=metric_choice, gridcolor="rgba(180,180,180,0.15)"),
-        xaxis=dict(showgrid=False),
-        showlegend=False,
-        margin=dict(l=50, r=20, t=20, b=40),
-    )
-    st.plotly_chart(bar_fig, use_container_width=True)
-
+    @st.fragment
+    def metric_chart():
+        st.subheader("📈 Key Metrics — Visual Comparison")
+        metric_choice = st.selectbox(
+            "Select metric to compare",
+            ["Market Cap ($B)", "TTM Revenue ($B)", "Gross Margin (%)",
+            "P/E Ratio", "Return on Equity (%)", "Operating Margin (%)"],
+        )
+        metric_map = {
+            "Market Cap ($B)":      ("market_cap",       lambda v: v / 1e9),
+            "TTM Revenue ($B)":     ("revenue_ttm",      lambda v: v / 1e9),
+            "Gross Margin (%)":     ("gross_margin",     lambda v: v * 100),
+            "P/E Ratio":            ("pe_ratio",         lambda v: v),
+            "Return on Equity (%)": ("return_on_equity", lambda v: v * 100),
+            "Operating Margin (%)": ("operating_margin", lambda v: v * 100),
+        }
+        key, transform = metric_map[metric_choice]
+        bar_fig = go.Figure()
+        for i, (company, ticker) in enumerate(ticker_map.items()):
+            fin = financials.get(ticker, {})
+            val = fin.get(key, 0)
+            color, _ = COLORS[i % len(COLORS)]
+            bar_fig.add_trace(go.Bar(
+                x=[company], y=[transform(val) if val else 0],
+                name=company, marker_color=color,
+            ))
+        bar_fig.update_layout(
+            height=320, barmode="group",
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(title=metric_choice, gridcolor="rgba(180,180,180,0.15)"),
+            xaxis=dict(showgrid=False),
+            showlegend=False,
+            margin=dict(l=50, r=20, t=20, b=40),
+        )
+        st.plotly_chart(bar_fig, use_container_width=True)
+    metric_chart()
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN DASHBOARD
 # ══════════════════════════════════════════════════════════════════════════════
@@ -508,12 +509,13 @@ def render_dashboard(settings: dict):
     st.divider()
 
     # ── Tabs ───────────────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📰 News & Sentiment",
         "⚔️ Competitor Analysis",
         "💰 Financials",
         "🎯 What to Improve",
         "📄 Report Forecasting",
+        "🧭 Intelligence Navigator",   # ← new
     ])
 
     # ── Tab 1 — News ──────────────────────────────────────────────────────────
@@ -573,7 +575,7 @@ def render_dashboard(settings: dict):
                 use_container_width=True,
             )
             st.divider()
-
+            
             render_financial_comparison(ticker_map, financials)
             st.divider()
 
@@ -600,10 +602,22 @@ def render_dashboard(settings: dict):
         st.markdown(improve_out)
 
     with tab5:
-        render_report_upload_section(
-        default_ticker=ticker_map.get(company, ""),
-        default_topic=company,
-    )
+        @st.fragment
+        def forecast_tab():
+            render_report_upload_section(
+            default_ticker=ticker_map.get(company, ""),
+            default_topic=company,
+        )
+        forecast_tab()
+    with tab6:
+        @st.fragment
+        def run_intelli():
+            render_intelligence_navigator(
+                company, brief, news_out, comp_out,
+                fin_out, improve_out, financials,
+                ticker_map, competitors
+            )
+        run_intelli()
 
 
 # ══════════════════════════════════════════════════════════════════════════════

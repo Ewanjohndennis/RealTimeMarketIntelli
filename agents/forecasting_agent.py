@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore")
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-LOOKBACK      = 30    # how many past days the LSTM sees at once (sequence length)
+LOOKBACK      = 20    # how many past days the LSTM sees at once (sequence length)
 EPOCHS        = 80    # training iterations (increase for better accuracy, slower training)
 HIDDEN_SIZE   = 64    # number of LSTM neurons per layer
 NUM_LAYERS    = 2     # stacked LSTM depth
@@ -84,7 +84,7 @@ class LSTMForecaster(nn.Module):
 class DataCollector:
     """Fetches stock prices and builds a daily sentiment time series."""
 
-    def __init__(self, ticker: str, topic: str, history_days: int = 180):
+    def __init__(self, ticker: str, topic: str, history_days: int = 365):
         self.ticker       = ticker
         self.topic        = topic
         self.history_days = history_days
@@ -238,9 +238,13 @@ def train_lstm(series: pd.Series,
     train_data = scaled[:split]
     test_data  = scaled[split:]
 
-    if len(train_data) <= lookback or len(test_data) <= lookback:
+    if len(train_data) <= lookback:
         raise ValueError(f"Not enough data for '{label}'. "
-                         f"Need > {lookback * 2} days, got {len(scaled)}.")
+                     f"Need > {lookback} days for training, got {len(train_data)}.")
+    if len(test_data) <= lookback:
+        # not enough test data — reduce test split instead of crashing
+        test_data = scaled[-(lookback + 5):]
+        train_data = scaled[:-(lookback + 5)]
 
     X_train, y_train = make_sequences(train_data, lookback)
     X_test,  y_test  = make_sequences(test_data,  lookback)
