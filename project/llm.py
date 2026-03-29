@@ -13,6 +13,6 @@ def ask_llm(system_prompt, user_prompt):
             {"role": "user", "content": user_prompt}
         ],
         temperature=0.4,
-        max_tokens=1200,
+        max_tokens=800,
     )
     return response.choices[0].message.content
