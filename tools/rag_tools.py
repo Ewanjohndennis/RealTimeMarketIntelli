@@ -10,27 +10,27 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data", "knowledge")
 VECTOR_DIR = os.path.join(BASE_DIR, "vector_store")
 
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+embeddings = None
 
+def get_embeddings():
+    global embeddings
+    if embeddings is None:
+        print("🔄 Loading embeddings...")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+    return embeddings
 
 def build_vector_store():
-
-    
-
     documents = []
 
     for file in os.listdir(DATA_DIR):
-
         if file.endswith(".txt"):
-
             file_path = os.path.join(DATA_DIR, file)
 
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            text = f.read()
-
-            documents.append(Document(page_content=text))
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+                documents.append(Document(page_content=text))
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
@@ -39,12 +39,13 @@ def build_vector_store():
 
     chunks = splitter.split_documents(documents)
 
-    db = FAISS.from_documents(chunks, embeddings)
+    embeddings = get_embeddings()
 
+    db = FAISS.from_documents(chunks, embeddings)
     db.save_local(VECTOR_DIR)
 
-
 def search_company_knowledge(company: str, query: str):
+    embeddings = get_embeddings()
 
     db = FAISS.load_local(
         VECTOR_DIR,

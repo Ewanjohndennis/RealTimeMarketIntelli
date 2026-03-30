@@ -18,6 +18,11 @@ from serpapi import GoogleSearch
 from project.orchestrator import run_pipeline
 from style import inject_css, render_news_card, render_metric_card, render_section_badge
 from intelligence_navigator import render_intelligence_navigator
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
 load_dotenv()
 
 # ── yfinance crumb fix — must be set before any yfinance calls ─────────────────
@@ -398,6 +403,42 @@ def render_financial_comparison(ticker_map: dict, financials: dict):
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN DASHBOARD
 # ══════════════════════════════════════════════════════════════════════════════
+
+def send_report_email(pdf_bytes: bytes, company: str) -> bool:
+    sender      = os.getenv("SENDER_EMAIL")
+    app_pass    = os.getenv("SENDER_APP_PASSWORD")
+    recipient   = os.getenv("RECIPIENT_EMAIL")
+
+    if not all([sender, app_pass, recipient]):
+        return False
+
+    try:
+        msg = MIMEMultipart()
+        msg["From"]    = sender
+        msg["To"]      = recipient
+        msg["Subject"] = f"{company} Intelligence Report — {datetime.now().strftime('%B %d, %Y')}"
+
+        body = f"Please find attached the latest intelligence report for {company}, generated on {datetime.now().strftime('%B %d, %Y at %H:%M')}."
+        msg.attach(MIMEText(body, "plain"))
+
+        attachment = MIMEBase("application", "octet-stream")
+        attachment.set_payload(pdf_bytes)
+        encoders.encode_base64(attachment)
+        attachment.add_header(
+            "Content-Disposition",
+            f"attachment; filename={company.replace(' ', '_')}_Report.pdf"
+        )
+        msg.attach(attachment)
+
+        with smtplib.SMTP_SSL("smtp.zoho.in", 465) as server:
+            server.login(sender, app_pass)
+            server.sendmail(sender, recipient, msg.as_string())
+        return True
+
+    except Exception as e:
+        st.error(f"Email failed: {e}")
+        return False
+
 def render_dashboard(settings: dict):
     company      = settings["company_name"]
     competitors  = settings["competitors"]
@@ -486,21 +527,36 @@ def render_dashboard(settings: dict):
     st.caption(f"Report generated · {generated_at}")
 
 # ── PDF download ─────────────────────────────────────────────────────
-    try:
-        pdf_bytes = generate_pdf(
+    @st.fragment
+    def report_actions():
+        try:
+            pdf_bytes = generate_pdf(
                 company, competitors, brief, news_out, comp_out,
                 fin_out, improve_out, financials, ticker_map, generated_at,
             )
-        st.download_button(
-                label="📄 Download Full Report (PDF)",
-                data=pdf_bytes,
-                file_name=f"{company.replace(' ', '_')}_Intelligence_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                type="primary",
-            )
-    except Exception as e:
-            st.warning(f"PDF generation unavailable: {e}")
 
+            col_dl, col_mail = st.columns([1, 1])
+
+            with col_dl:
+                st.download_button(
+                    label="📄 Download Full Report (PDF)",
+                    data=pdf_bytes,
+                    file_name=f"{company.replace(' ', '_')}_Intelligence_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+            with col_mail:
+                if st.button("📧 Email Report", type="secondary", use_container_width=True):
+                    with st.spinner("Sending email..."):
+                        success = send_report_email(pdf_bytes, company)
+                    if success:
+                        st.success(f"Report sent to {os.getenv('RECIPIENT_EMAIL')} ✓")
+
+        except Exception as e:
+            st.warning(f"PDF generation unavailable: {e}")
+    report_actions()
     st.divider()
 
     # ── Executive brief ────────────────────────────────────────────────────────

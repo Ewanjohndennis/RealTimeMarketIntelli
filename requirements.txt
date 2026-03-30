@@ -26,3 +26,5 @@ vaderSentiment
 feedparser
 pdfplumber
 ollama
+fastmcp
+httpx

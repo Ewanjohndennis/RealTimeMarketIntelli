@@ -21,7 +21,7 @@ WHAT TO IMPROVE:
 Provide EXACTLY 5 strategic recommendations.
 
 Each must:
-- Be 100-120 words
+- Be exactly 60-80 words
 - Include action + impact
 - Be specific and practical
 

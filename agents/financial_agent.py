@@ -25,7 +25,7 @@ RISKS:
 
 Rules:
 - Exactly 5 bullets per section
-- Each bullet ≤ 100 words
+- Each bullet ≤ 70 words
 - No markdown code blocks
 - No extra text
 
