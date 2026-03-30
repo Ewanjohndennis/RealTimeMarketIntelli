@@ -18,13 +18,13 @@ An AI-powered, multi-agent strategic intelligence platform that delivers real-ti
 - 📋 **Executive Brief** — 5-point C-suite summary synthesized from all agent outputs
 - 📈 **LSTM Forecasting** — 2-layer stacked LSTM model (PyTorch) for stock price prediction
 - 📄 **PDF Export** — Full intelligence report download via ReportLab
+- 📧 **Email Report** — One-click email delivery of the full PDF report via SMTP
 - ⚡ **Parallel Execution** — Data fetching and AI agents both run concurrently via `ThreadPoolExecutor`
 - 🎨 **Premium UI** — Custom dark theme with gold accents injected via Streamlit CSS
 
 ---
 
 ## 🏗️ Project Structure
-
 ```
 RealTimeMarketIntelli/
 │
@@ -56,7 +56,6 @@ RealTimeMarketIntelli/
 ---
 
 ## 🧠 Architecture
-
 ```
                         ┌──────────────────────────┐
                         │      Streamlit UI         │
@@ -87,7 +86,8 @@ RealTimeMarketIntelli/
                         │     Streamlit Dashboard  │
                         │  News · Competitors ·    │
                         │  Financials · Strategy · │
-                        │  Forecasting · PDF       │
+                        │  Forecasting · PDF ·     │
+                        │  Email Report            │
                         └─────────────────────────┘
 ```
 
@@ -109,6 +109,7 @@ RealTimeMarketIntelli/
 | **Forecasting** | PyTorch LSTM (2-layer stacked) |
 | **Database** | MongoDB Atlas (shared config via `_id = "global_company_config"`) |
 | **PDF Export** | ReportLab |
+| **Email** | SMTP (Zoho Mail via `smtplib`) |
 | **Environment** | python-dotenv |
 
 ---
@@ -119,18 +120,17 @@ RealTimeMarketIntelli/
 
 - Python 3.9+
 - MongoDB Atlas account
-- HuggingFace account (free tier works)
+- Groq API key
 - SerpAPI key (optional — used for Trends and news fallback)
+- Zoho Mail account (for email report feature)
 
 ### 1. Clone the Repository
-
 ```bash
 git clone https://github.com/Ewanjohndennis/RealTimeMarketIntelli.git
 cd RealTimeMarketIntelli
 ```
 
 ### 2. Create a Virtual Environment
-
 ```bash
 python -m venv venv
 # Windows
@@ -140,7 +140,6 @@ source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
-
 ```bash
 pip install -r requirements.txt
 ```
@@ -148,17 +147,21 @@ pip install -r requirements.txt
 ### 4. Configure Environment Variables
 
 Create a `.env` file in the root directory:
-
 ```env
 GROQ_API_KEY=your_groq_api_key
 SERP_API_KEY=your_serpapi_key
 MONGO_URI=your_mongodb_atlas_connection_string
+
+# Email Report (optional)
+SENDER_EMAIL=your_zoho_email@zohomail.in
+SENDER_APP_PASSWORD=your_zoho_password
+RECIPIENT_EMAIL=destination@example.com
 ```
 
 > `NEWS_API_KEY` is optional — the system uses Google News RSS as the primary source and SerpAPI as fallback.
+> Email variables are optional — if not set, the Email Report button will silently skip sending.
 
 ### 5. Run the Application
-
 ```bash
 streamlit run project/app.py
 ```
@@ -186,7 +189,7 @@ Open `http://localhost:8501` in your browser.
 4. Click **Save & Load Dashboard** — config is saved to MongoDB
 5. The system fetches news, trends, and financial data in parallel, then runs the AI agent pipeline
 6. View results across 5 tabs: **News & Sentiment**, **Competitor Analysis**, **Financials**, **What to Improve**, **Forecasting**
-7. Click **Download Full Report (PDF)** to export
+7. Click **Download Full Report (PDF)** to export, or **Email Report** to send the PDF directly to the configured recipient
 
 ---
 
@@ -203,13 +206,34 @@ Open `http://localhost:8501` in your browser.
 
 ---
 
+## 📧 Email Report Feature
+
+The dashboard includes a one-click **Email Report** button alongside the PDF download. Once a report is generated, clicking the button attaches the full PDF and sends it to the configured recipient via SMTP.
+
+**Setup:**
+1. Create a Zoho Mail account at [zoho.com/mail](https://www.zoho.com/mail/)
+2. Enable SMTP access: Zoho Mail → Settings → Mail → SMTP and enable outbound SMTP
+3. Add the three email variables to your `.env` file (see Configuration section above)
+
+**SMTP configuration used:**
+| Setting | Value |
+|---|---|
+| Server | `smtp.zoho.in` |
+| Port | `465` |
+| Mode | SSL |
+
+> If email sending fails with an authentication error, verify that SMTP is enabled in your Zoho Mail settings under Settings → Mail → POP/IMAP/SMTP.
+
+---
+
 ## 🔑 API Keys
 
 | Service | Purpose | Link |
 |---|---|---|
-| HuggingFace | LLM inference (`openai/gpt-oss-20b`) | [huggingface.co](https://huggingface.co) |
+| Groq | LLM inference (`llama-3.3-70b-versatile`) | [console.groq.com](https://console.groq.com) |
 | SerpAPI | Google Trends + news fallback | [serpapi.com](https://serpapi.com) |
 | MongoDB Atlas | Shared config persistence | [mongodb.com/atlas](https://www.mongodb.com/cloud/atlas) |
+| Zoho Mail | Email report delivery | [zoho.com/mail](https://www.zoho.com/mail/) |
 
 ---
 
@@ -230,6 +254,8 @@ The current backend is Groq (`llama-3.3-70b-versatile`) — but when the free ti
 
 The `project/llm.py` file is essentially a graveyard of commented-out provider configs, each one a timestamp of a deadline that was closer than the rate limit.
 
+---
+
 ## 🎓 Internship Context
 
 This project was developed as part of the **Infosys Springboard Artificial Intelligence Internship**. It demonstrates practical application of:
@@ -241,6 +267,7 @@ This project was developed as part of the **Infosys Springboard Artificial Intel
 - Full-stack AI application development with Streamlit
 - Time-series forecasting with LSTM (PyTorch)
 - Cloud database integration (MongoDB Atlas)
+- Automated report delivery via SMTP email integration
 
 ---
 

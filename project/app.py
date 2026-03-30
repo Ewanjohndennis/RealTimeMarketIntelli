@@ -25,7 +25,6 @@ from email.mime.text import MIMEText
 from email import encoders
 load_dotenv()
 
-# ── yfinance crumb fix — must be set before any yfinance calls ─────────────────
 import requests as _requests
 _YF_SESSION = _requests.Session()
 _YF_SESSION.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
@@ -44,7 +43,7 @@ COLORS = [
 ]
 
 st.set_page_config(
-    page_title="Company Intelligence Dashboard",
+    page_title="Real-Time Industry Insight & Strategic Intelligence System Dashboard",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -762,7 +761,7 @@ with st.sidebar:
 
 # ── Render ─────────────────────────────────────────────────────────────────────
 if not settings.get("company_name"):
-    st.title("🧠 Company Intelligence Dashboard")
+    st.title("🧠 Real-Time Industry Insight & Strategic Intelligence System")
     st.divider()
     if is_admin():
         st.info("👈 Open the sidebar, enter your company name, and click Save & Load Dashboard.")
