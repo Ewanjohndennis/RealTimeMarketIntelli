@@ -1,4 +1,10 @@
-.env
+node_modules/
+package.json
+package-lock.json
+venv/
+.venv/
+vector_store/
 __pycache__/
 *.pyc
-vector_store/index.pkl
+.env
+*.pdf
