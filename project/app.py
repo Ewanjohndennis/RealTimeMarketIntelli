@@ -30,6 +30,14 @@ _YF_SESSION = _requests.Session()
 _YF_SESSION.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
 
 # ── Config ─────────────────────────────────────────────────────────────────────
+try:
+    load_dotenv()
+    if hasattr(st, "secrets") and st.secrets:
+        for key, value in st.secrets.items():
+            os.environ.setdefault(key, value)
+except Exception:
+    pass
+
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 SERP_API_KEY = os.getenv("SERP_API_KEY")
 MONGO_URI    = os.getenv("MONGO_URI")
