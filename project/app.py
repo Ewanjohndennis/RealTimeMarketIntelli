@@ -412,14 +412,102 @@ def send_report_email(pdf_bytes: bytes, company: str) -> bool:
         return False
 
     try:
-        msg = MIMEMultipart()
+        msg = MIMEMultipart("alternative")
         msg["From"]    = sender
-        msg["To"]      = recipient
         msg["Subject"] = f"{company} Intelligence Report — {datetime.now().strftime('%B %d, %Y')}"
 
-        body = f"Please find attached the latest intelligence report for {company}, generated on {datetime.now().strftime('%B %d, %Y at %H:%M')}."
-        msg.attach(MIMEText(body, "plain"))
+        # HTML Email Content
+        html_body = f"""
+        <html>
+        <head>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                background-color: #f4f6f8;
+                margin: 0;
+                padding: 0;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: auto;
+                background: #ffffff;
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }}
+            .banner {{
+                background: linear-gradient(135deg, #1f4037, #99f2c8);
+                color: white;
+                padding: 20px;
+                text-align: center;
+                font-size: 22px;
+                font-weight: bold;
+            }}
+            .content {{
+                padding: 25px;
+                color: #333;
+                line-height: 1.6;
+            }}
+            .footer {{
+                font-size: 12px;
+                color: #888;
+                text-align: center;
+                padding: 15px;
+                border-top: 1px solid #eee;
+            }}
+            .highlight {{
+                font-weight: bold;
+                color: #1f4037;
+            }}
+        </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="banner">
+                    📊 Industry Intelligence Report
+                </div>
+                <div class="content">
+                    <p>Hello,</p>
 
+                    <p>
+                        Your latest <span class="highlight">{company}</span> intelligence report is ready.
+                    </p>
+
+                    <p>
+                        This report provides insights into:
+                        <ul>
+                            <li>Market trends & news signals</li>
+                            <li>Competitor positioning</li>
+                            <li>Financial performance indicators</li>
+                            <li>AI-driven strategic outlook</li>
+                        </ul>
+                    </p>
+
+                    <p>
+                        📅 Generated on: <strong>{datetime.now().strftime('%B %d, %Y at %H:%M')}</strong>
+                    </p>
+
+                    <p>
+                        Please find the detailed report attached.
+                    </p>
+
+                    <p>
+                        Regards,<br>
+                        <strong>Industry Intelligence System</strong>
+                    </p>
+                </div>
+
+                <div class="footer">
+                    This is an automated report. Please do not reply.
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(html_body, "html"))
+
+        # Attachment
         attachment = MIMEBase("application", "octet-stream")
         attachment.set_payload(pdf_bytes)
         encoders.encode_base64(attachment)
@@ -429,15 +517,24 @@ def send_report_email(pdf_bytes: bytes, company: str) -> bool:
         )
         msg.attach(attachment)
 
+        recipients_raw = os.getenv("RECIPIENT_EMAIL", "")
+        recipients = [email.strip() for email in recipients_raw.split(",") if email.strip()]
+
+        if not recipients:
+            return False
+
+        # Set ONLY ONCE
+        msg["To"] = ", ".join(recipients)
+
         with smtplib.SMTP_SSL("smtp.zoho.in", 465) as server:
             server.login(sender, app_pass)
-            server.sendmail(sender, recipient, msg.as_string())
+            server.sendmail(sender, recipients, msg.as_string())
+
         return True
 
     except Exception as e:
         st.error(f"Email failed: {e}")
         return False
-
 def render_dashboard(settings: dict):
     company      = settings["company_name"]
     competitors  = settings["competitors"]
