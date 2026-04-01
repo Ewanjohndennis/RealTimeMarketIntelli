@@ -13,12 +13,17 @@ VECTOR_DIR = os.path.join(BASE_DIR, "vector_store")
 embeddings = None
 
 def get_embeddings():
-    global embeddings
-    if embeddings is None:
-        print("🔄 Loading embeddings...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
+    # This is your local path that works right now
+    local_path = r"C:\Users\Dennis\.cache\huggingface\hub\models--sentence-transformers--all-MiniLM-L6-v2\snapshots\c9745ed1d9f207416be6d2e6f8de32d1f16199bf"
+    
+    # Check if the local folder actually exists on this machine
+    if os.path.exists(local_path):
+        model_identifier = local_path
+    else:
+        # This is what GitHub/Production will use
+        model_identifier = "sentence-transformers/all-MiniLM-L6-v2"
+        
+    embeddings = HuggingFaceEmbeddings(model_name=model_identifier)
     return embeddings
 
 def build_vector_store():
